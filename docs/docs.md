@@ -23,8 +23,8 @@ Run a **self-hosted, sandboxed shell environment** that Open WebUI agents can us
 
 - Official upstream image `ghcr.io/open-webui/open-terminal` with **pinned version tags** (or digest).
 - Docker Compose service(s) on the **internal** `infernet` network (or equivalent in K8s).
-- Persistent volume for terminal home/workspace (`/home/user` in the default image).
-- `OPEN_TERMINAL_API_KEY` and other config via `.env` modeled on [`template.env`](../template.env).
+- Persistent volume for multi-user homes (`open-terminal-data` → `/home` when `OPEN_TERMINAL_MULTI_USER=true`).
+- `OPEN_TERMINAL_API_KEY` and other config via `.env` modeled on [`techops/production/template.env`](../techops/production/template.env).
 - Documentation for how admins configure Open WebUI to point at the internal URL.
 
 ## Out of scope (unless explicitly expanded later)
@@ -51,13 +51,12 @@ Run a **self-hosted, sandboxed shell environment** that Open WebUI agents can us
 | `slim` | Hardened internal deploy | ~430 MB | glibc; no runtime package env vars |
 | `alpine` | Minimal footprint | ~230 MB | musl; some pip wheels may compile at build time |
 
-**Default recommendation for infernet:** start with **`slim`** or a **version-pinned full image** after spiking agent needs (compilers, `apt` at startup, multi-user). Avoid `latest` in production manifests.
+**Deployed choice:** **full** image `0.11.34` (GHCR tag without `v` prefix; multi-user requires full). Avoid `latest` in production manifests.
 
-Example pin (replace tag at build/plan time):
+Pinned in Compose:
 
 ```text
-ghcr.io/open-webui/open-terminal:v0.11.34
-# or: ghcr.io/open-webui/open-terminal:v0.11.34-slim
+ghcr.io/open-webui/open-terminal:0.11.34
 ```
 
 ## Configuration surface
@@ -74,12 +73,12 @@ Settings resolve in order: CLI flags → environment variables → config TOML �
 
 | Variable | Purpose |
 |----------|---------|
-| `OPEN_TERMINAL_MULTI_USER` | Per-user Linux accounts in one container — **not** production-grade isolation; only for small trusted groups |
+| `OPEN_TERMINAL_MULTI_USER` | **`true` in production** — per-user Linux accounts; **not** production-grade isolation; only for small trusted groups |
 | `OPEN_TERMINAL_PACKAGES` / `OPEN_TERMINAL_PIP_PACKAGES` / `OPEN_TERMINAL_NPM_PACKAGES` | Install extra tooling at container start (**full image only**) |
 | `OPEN_TERMINAL_SESSION_CWD_TTL` | Session working-directory TTL (seconds) |
 | Host/port | Usually `0.0.0.0:8000` inside the container; no host publish |
 
-Copy [`template.env`](../template.env) to **`.env`** at the repo root (gitignored when added). Extend `template.env` as variables are finalized.
+Copy [`techops/production/template.env`](../techops/production/template.env) to **`techops/production/.env`** (gitignored). Root [`template.env`](../template.env) redirects to that path.
 
 ## Open WebUI wiring (after deploy)
 
@@ -91,22 +90,18 @@ Copy [`template.env`](../template.env) to **`.env`** at the repo root (gitignore
 
 Do **not** register Open Terminal under OpenAPI tool servers — that path is for mcpo/OpenAPI integrations (see infernet.mcp.tools).
 
-## Repository layout
+## Production assets (repo layout)
 
-**Current (scaffold):**
+| Path | Role |
+|------|------|
+| [`techops/production/docker-compose.production.yaml`](../techops/production/docker-compose.production.yaml) | Pinned `0.11.34` full image, multi-user, volume `/home`, external `infernet`, no host ports |
+| [`techops/production/template.env`](../techops/production/template.env) | Committed env template |
+| [`techops/production/.env`](../techops/production/.env) | Local secrets (gitignored); copy from `template.env` |
+| [`techops/production/README.md`](../techops/production/README.md) | Runbook, Open WebUI wiring, smoke tests |
+| [`docs/docs.md`](docs.md) | This planning brief |
+| [`README.md`](../README.md) | High-level deploy overview |
 
-- [`docs/docs.md`](docs.md) — this planning brief
-- [`template.env`](../template.env) — committed env template
-- [`README.md`](../README.md) — one-line project summary
-
-**Planned (mirror infernet.mcp.tools pattern):**
-
-- `techops/production/docker-compose.production.yaml` — production Compose stack
-- `techops/production/production.Dockerfile` — optional thin wrapper if pin-by-digest or extra packages are needed
-- `techops/production/template.env` — production env template (or keep root `template.env` if single-environment)
-- `techops/production/.env` — local secrets (gitignored)
-
-Until those files exist, agents should treat this doc plus upstream Open Terminal docs as the spec.
+No `production.Dockerfile` — upstream semver tags are pinned directly in Compose.
 
 ## Security and compliance
 
@@ -120,7 +115,7 @@ Until those files exist, agents should treat this doc plus upstream Open Termina
 ## Operations
 
 - **Health:** use HTTP readiness against `/docs` or a lightweight API route once Compose exists.
-- **Persistence:** named volume or bind mount for terminal home (e.g. `open-terminal-data` → `/home/user`).
+- **Persistence:** named volume `open-terminal-data` → `/home` (multi-user layout).
 - **Restart:** `restart: unless-stopped` (consistent with infernet.openwebui).
 - **Upgrades:** bump pinned tag in Dockerfile/Compose, `docker compose pull` / `build --no-cache`, verify Open WebUI integration still works; check [release notes](https://github.com/open-webui/open-terminal/releases) for breaking changes.
 
@@ -128,22 +123,29 @@ Until those files exist, agents should treat this doc plus upstream Open Termina
 
 Use as a task breakdown; order may shift after a smoke test with infernet.openwebui.
 
-1. [ ] Choose image variant (`slim` vs full) and pin upstream tag (document in Compose/Dockerfile).
-2. [ ] Flesh out [`template.env`](../template.env) with all required/optional variables and comments.
-3. [ ] Add `techops/production/` Compose (and Dockerfile if needed); join external network `infernet`.
-4. [ ] **No** `ports:` mapping on `open-terminal`; only `expose` or implicit internal DNS.
-5. [ ] Add volume for persistent workspace; document backup expectations.
-6. [ ] Document Open WebUI admin steps (URL + API key) in README or techops README.
-7. [ ] Smoke test: Open WebUI agent can list files and run a simple command via integration.
+1. [x] Choose image variant: **full** `0.11.34` (required for multi-user); documented in Compose.
+2. [x] Flesh out [`techops/production/template.env`](../techops/production/template.env).
+3. [x] Add `techops/production/` Compose; join external network `infernet`.
+4. [x] **No** `ports:` mapping on `open-terminal`.
+5. [x] Volume `open-terminal-data` → `/home`; backup notes in techops README.
+6. [x] Open WebUI admin steps in README and techops README.
+7. [x] Smoke test (infra): `oi-open-terminal` on `infernet`, no host ports, `curl` from `oi-open-webui` → 200 on `/docs`. UI: list files / `echo hello` after Admin integration wiring.
 8. [ ] Optional: K8s Service + Deployment with internal ClusterIP only; secret refs for API key.
+
+## Resolved decisions
+
+| Topic | Choice |
+|-------|--------|
+| Image | Full `ghcr.io/open-webui/open-terminal:0.11.34` (multi-user) |
+| Multi-user | `OPEN_TERMINAL_MULTI_USER=true` |
+| Compose location | Standalone stack in this repo; external network `infernet` |
+| Resource limits | 4G memory limit, 1G reservation |
+| Host ports | None |
 
 ## Open decisions (fill in as the project evolves)
 
-- **Image variant:** `slim` vs full sandbox for default agent workloads.
-- **Single shared sandbox vs** `OPEN_TERMINAL_MULTI_USER=true` vs separate [Terminals](https://github.com/open-webui/terminals) controller for per-user containers.
-- **Compose location:** standalone stack in this repo vs additional service block in infernet.openwebui `docker-compose.yaml`.
-- **Resource limits:** CPU/memory caps for terminal container (especially if using full image).
 - **Egress:** whether upstream egress firewall defaults are sufficient or need custom allowlists.
+- **Stronger isolation:** adopt [Terminals](https://github.com/open-webui/terminals) if untrusted multi-tenant use appears.
 
 ## Success criteria
 

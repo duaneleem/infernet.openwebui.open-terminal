@@ -1,0 +1,51 @@
+# Run from repository root. Example:
+#   cp techops/production/template.env techops/production/.env
+#   docker compose -f techops/production/docker-compose.production.yaml --env-file techops/production/.env up -d
+#   Stop: docker compose -f techops/production/docker-compose.production.yaml down
+#
+# Network `infernet` is shared with infernet.openwebui. Start that stack first,
+# or create the network: docker network create infernet
+#
+# Pinned image: ghcr.io/open-webui/open-terminal 0.11.34 (GHCR tag; full image; multi-user)
+
+name: infernet-open-terminal
+services:
+  open-terminal:
+    image: ghcr.io/open-webui/open-terminal:0.11.34
+    container_name: oi-open-terminal
+    env_file:
+      - .env
+    environment:
+      OPEN_TERMINAL_API_KEY: ${OPEN_TERMINAL_API_KEY}
+      OPEN_TERMINAL_MULTI_USER: ${OPEN_TERMINAL_MULTI_USER:-true}
+    volumes:
+      - open-terminal-data:/home
+    networks:
+      - infernet
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/docs').read(64)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+volumes:
+  open-terminal-data:
+
+networks:
+  infernet:
+    external: true
+    name: infernet
