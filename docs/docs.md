@@ -76,6 +76,8 @@ Settings resolve in order: CLI flags → environment variables → config TOML �
 | `OPEN_TERMINAL_MULTI_USER` | **`true` in production** — per-user Linux accounts; **not** production-grade isolation; only for small trusted groups |
 | `OPEN_TERMINAL_PACKAGES` / `OPEN_TERMINAL_PIP_PACKAGES` / `OPEN_TERMINAL_NPM_PACKAGES` | Install extra tooling at container start (**full image only**) |
 | `OPEN_TERMINAL_SESSION_CWD_TTL` | Session working-directory TTL (seconds) |
+| `TRELLO_API_KEY`, `TRELLO_TOKEN` | Optional — Trello REST API for **curl/CLI** in the terminal (same names as infernet.mcp.tools); not used by Open Terminal server |
+| `TRELLO_WORKSPACE_ID`, `TRELLO_BOARD_ID` | Optional defaults for Trello scripts |
 | Host/port | Usually `0.0.0.0:8000` inside the container; no host publish |
 
 Copy [`techops/production/template.env`](../techops/production/template.env) to **`techops/production/.env`** (gitignored). Root [`template.env`](../template.env) redirects to that path.

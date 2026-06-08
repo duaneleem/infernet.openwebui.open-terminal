@@ -16,6 +16,10 @@ Open Terminal runs as a **standalone** service on the shared Docker network `inf
 | `OPEN_TERMINAL_API_KEY` | Yes | Strong secret; same value in Open WebUI Admin → Integrations → Open Terminal. |
 | `OPEN_TERMINAL_MULTI_USER` | Yes (default `true`) | Per-user Linux homes; **full image only** (not slim/alpine). |
 | `OPEN_TERMINAL_SESSION_CWD_TTL` | No | Session cwd TTL in seconds. |
+| `TRELLO_API_KEY` | No (for Trello CLI) | Trello API key from https://trello.com/app-key; same name as [infernet.mcp.tools](https://github.com/open-webui/mcpo) — copy from that stack’s `.env` if you use both. |
+| `TRELLO_TOKEN` | No (for Trello CLI) | Trello user token; keep secret. |
+| `TRELLO_WORKSPACE_ID` | No | Optional default workspace for scripts. |
+| `TRELLO_BOARD_ID` | No | Optional default board for scripts. |
 
 ## Multi-user security
 
@@ -32,6 +36,7 @@ docker network create infernet
 ```bash
 cp techops/production/template.env techops/production/.env
 # Set OPEN_TERMINAL_API_KEY in .env (e.g. openssl rand -hex 32)
+# Optional: set TRELLO_API_KEY and TRELLO_TOKEN for curl against the Trello API
 docker compose -f techops/production/docker-compose.production.yaml \
   --env-file techops/production/.env up -d
 ```
@@ -68,6 +73,16 @@ docker port oi-open-terminal 2>&1 || true
 ```
 
 In the UI: file browser and `echo hello` via terminal. With two WebUI users, confirm isolated homes.
+
+### Trello via curl
+
+After setting `TRELLO_API_KEY` and `TRELLO_TOKEN` in `.env`, recreate the container (`docker compose … up -d`). In an Open Terminal shell:
+
+```bash
+test -n "$TRELLO_API_KEY" && test -n "$TRELLO_TOKEN" && echo "Trello env OK"
+
+curl -s "https://api.trello.com/1/members/me/boards?key=${TRELLO_API_KEY}&token=${TRELLO_TOKEN}" | jq .
+```
 
 ## Persistence
 
